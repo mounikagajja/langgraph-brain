@@ -4,7 +4,7 @@ Agentic RAG layer over the LangGraph open source repo. Ingests issues, PRs, and 
 
 ## Architecture
 
-\`\`\`
+```
 LangGraph repo (issues + PRs + docs)
   ↓
 Ingestion (Python, GitHub API, markdown parser)
@@ -34,7 +34,7 @@ LangGraph Agent (LangGraph 1.0)
   ↓
 Observability: LangSmith (traces) + Langfuse (datasets + experiments)
 Evaluation: RAGAS (faithfulness, context precision, context recall, answer relevance)
-\`\`\`
+```
 
 ## Stack
 
