@@ -62,4 +62,4 @@ _Filled in at Week 3. Version-over-version comparison across 50 questions._
 
 ## Status
 
-Week 1 — repo scaffold in place. Ingestion next.
+Week 1 - repo scaffold in place. Ingestion next.
