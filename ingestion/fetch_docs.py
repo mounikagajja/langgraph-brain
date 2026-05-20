@@ -1,66 +1,121 @@
-"""Fetch LangGraph docs by shallow-cloning the repo and copying markdown files."""
+"""Fetch LangGraph docs from docs.langchain.com.
+
+The repo's local docs/llms.txt only lists ~13 highlight pages. The full doc
+index lives at docs.langchain.com/llms.txt and contains hundreds of pages.
+We pull that, filter to LangGraph + LangSmith content (skipping granular API
+references), and fetch each page as markdown.
+"""
 
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
+import re
+import time
 from pathlib import Path
+from urllib.parse import urlparse
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
-REPO_URL = "https://github.com/langchain-ai/langgraph.git"
-CLONE_DIR = Path("data/raw/_repo_clone")
+LLMS_INDEX_URL = "https://docs.langchain.com/llms.txt"
 DOCS_OUT = Path("data/raw/docs")
+
+# URL path prefixes we want to keep
+KEEP_PREFIXES = (
+    "/oss/python/langgraph/",
+    "/oss/python/common-errors",
+    "/langsmith/",
+)
+
+# URL path prefixes we skip (too granular, mostly REST endpoint stubs)
+SKIP_PREFIXES = (
+    "/api-reference/",
+    "/langsmith/agent-server-api/",  # 100+ tiny endpoint pages
+)
+
+
+def _extract_doc_urls(llms_txt: str) -> list[tuple[str, str]]:
+    """Parse llms.txt markdown links. Returns list of (title, url)."""
+    pattern = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for match in pattern.finditer(llms_txt):
+        title, url = match.group(1), match.group(2)
+        if "docs.langchain.com" not in url:
+            continue
+        path = urlparse(url).path
+        if any(path.startswith(p) for p in SKIP_PREFIXES):
+            continue
+        if not any(path.startswith(p) for p in KEEP_PREFIXES):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        out.append((title, url))
+    return out
+
+
+def _url_to_filename(url: str) -> str:
+    path = urlparse(url).path.strip("/")
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", path)
+    return f"{safe}.md" if safe else "index.md"
 
 
 def fetch_docs() -> int:
-    """Shallow-clone the LangGraph repo and copy all markdown files from docs/.
-
-    Returns the count of markdown files copied.
-    """
-    if CLONE_DIR.exists():
-        logger.info("Removing existing clone at %s", CLONE_DIR)
-        shutil.rmtree(CLONE_DIR, onerror=_force_remove)
-
-    CLONE_DIR.parent.mkdir(parents=True, exist_ok=True)
+    """Fetch the docs index, filter, then download each filtered page as markdown."""
     DOCS_OUT.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Shallow-cloning %s ...", REPO_URL)
-    subprocess.run(
-        ["git", "clone", "--depth", "1", REPO_URL, str(CLONE_DIR)],
-        check=True,
-    )
+    with httpx.Client(
+        timeout=30.0,
+        headers={"User-Agent": "langgraph-brain-ingest"},
+        follow_redirects=True,
+    ) as client:
+        logger.info("Fetching docs index: %s", LLMS_INDEX_URL)
+        r = client.get(LLMS_INDEX_URL)
+        r.raise_for_status()
+        llms_txt = r.text
 
-    docs_src = CLONE_DIR / "docs"
-    if not docs_src.exists():
-        # Fallback: some repos put docs at the root
-        docs_src = CLONE_DIR
+        (DOCS_OUT / "_llms_index.md").write_text(llms_txt, encoding="utf-8")
 
-    saved = 0
-    for md in docs_src.rglob("*.md"):
-        rel = md.relative_to(docs_src)
-        dest = DOCS_OUT / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(md, dest)
-        saved += 1
+        doc_links = _extract_doc_urls(llms_txt)
+        logger.info(
+            "Index has %d total links; %d match our filter (LangGraph + LangSmith)",
+            llms_txt.count("](http"),
+            len(doc_links),
+        )
 
-    # Cleanup the clone, we only needed the markdown
-    shutil.rmtree(CLONE_DIR, onerror=_force_remove)
-    logger.info("Copied %d markdown files to %s", saved, DOCS_OUT)
-    return saved
+        saved = 0
+        skipped = 0
+        for title, url in doc_links:
+            md_url = url if url.endswith(".md") else url + ".md"
+            try:
+                resp = client.get(md_url)
+                if resp.status_code != 200:
+                    resp = client.get(url)
+                if resp.status_code != 200:
+                    logger.warning("Skip %s (status %d)", url, resp.status_code)
+                    skipped += 1
+                    continue
+                content = resp.text
+            except httpx.HTTPError as e:
+                logger.warning("Skip %s (%s)", url, e)
+                skipped += 1
+                continue
 
+            fname = _url_to_filename(url)
+            out_path = DOCS_OUT / fname
+            header = f"<!-- source: {url}\ntitle: {title} -->\n\n"
+            out_path.write_text(header + content, encoding="utf-8")
+            saved += 1
+            if saved % 20 == 0:
+                logger.info("Fetched %d docs so far...", saved)
+            time.sleep(0.15)  # be polite
 
-def _force_remove(func, path, exc_info):
-    """Windows-safe rmtree handler for read-only .git files."""
-    import os
-    import stat
-
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
+        logger.info("Done. Saved %d docs, skipped %d, output %s", saved, skipped, DOCS_OUT)
+        return saved
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    n = fetch_docs()
-    logger.info("Done. Copied %d markdown files.", n)
+    fetch_docs()
