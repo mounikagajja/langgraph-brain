@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 
-from agent.config import DEFAULT_CONFIG, AgentConfig
+from agent.config import DEFAULT_CONFIG
 from agent.nodes import _llm, _trace
 from agent.prompts import (
     GENERATE_SYSTEM,
@@ -22,15 +22,15 @@ from agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-
 URL_RE = re.compile(r"https?://[^\s\)\]]+")
 
 
-def generate_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def generate_node(state: AgentState) -> dict:
     """Generate an answer grounded in the reranked chunks."""
+    agent_config = DEFAULT_CONFIG
     question = state["question"]
     reranked = state.get("reranked", [])
-    llm = _llm(config)
+    llm = _llm(agent_config)
 
     chunks_text = format_chunks(reranked)
     messages = [
@@ -43,7 +43,7 @@ def generate_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> di
     # Collect the source URLs the chunks actually came from
     available_urls = {c.get("source_url", "") for c in reranked if c.get("source_url")}
     cited_raw = set(URL_RE.findall(answer))
-    # citations = URLs that appear in the answer AND were real sources
+    # Match cited URLs against real sources (handle trailing punctuation/.md)
     citations = sorted(
         url
         for url in available_urls
@@ -54,7 +54,9 @@ def generate_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> di
     return {
         "answer": answer,
         "citations": citations,
-        "trace": _trace(state, f"generate: answer {len(answer)} chars, {len(citations)} citations"),
+        "trace": _trace(
+            state, f"generate: answer {len(answer)} chars, {len(citations)} citations"
+        ),
     }
 
 
@@ -82,12 +84,13 @@ def _parse_self_check(text: str) -> tuple[bool, str, float]:
     return grounded, reason, confidence
 
 
-def self_check_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def self_check_node(state: AgentState) -> dict:
     """Verify the answer is grounded in the context. Produces a confidence score."""
+    agent_config = DEFAULT_CONFIG
     question = state["question"]
     reranked = state.get("reranked", [])
     answer = state.get("answer", "")
-    llm = _llm(config)
+    llm = _llm(agent_config)
 
     chunks_text = format_chunks(reranked)
     messages = [
@@ -110,31 +113,26 @@ def self_check_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> 
     if not state.get("citations"):
         confidence = min(confidence, 0.5)
 
-    logger.info(
-        "self_check: grounded=%s confidence=%.2f", grounded, confidence
-    )
+    logger.info("self_check: grounded=%s confidence=%.2f", grounded, confidence)
     return {
         "self_check_passed": grounded,
         "self_check_notes": reason,
         "confidence": round(confidence, 3),
         "trace": _trace(
-            state,
-            f"self_check: grounded={grounded} confidence={confidence:.2f}",
+            state, f"self_check: grounded={grounded} confidence={confidence:.2f}"
         ),
     }
 
 
-
-def confidence_gate_node(
-    state: AgentState, config: AgentConfig = DEFAULT_CONFIG
-) -> dict:
+def confidence_gate_node(state: AgentState) -> dict:
     """Decide whether the answer needs human review based on confidence."""
+    agent_config = DEFAULT_CONFIG
     confidence = state.get("confidence", 0.0)
-    needs_review = confidence < config.confidence_threshold
+    needs_review = confidence < agent_config.confidence_threshold
     logger.info(
         "confidence_gate: confidence=%.2f threshold=%.2f needs_review=%s",
         confidence,
-        config.confidence_threshold,
+        agent_config.confidence_threshold,
         needs_review,
     )
     return {
@@ -142,6 +140,6 @@ def confidence_gate_node(
         "trace": _trace(
             state,
             f"confidence_gate: needs_human_review={needs_review} "
-            f"(conf={confidence:.2f} < {config.confidence_threshold})",
+            f"(conf={confidence:.2f} < {agent_config.confidence_threshold})",
         ),
     }

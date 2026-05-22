@@ -26,9 +26,11 @@ from mcp_server.retrieval import search
 logger = logging.getLogger(__name__)
 
 
-def _llm(config: AgentConfig = DEFAULT_CONFIG) -> ChatOllama:
+def _llm(agent_config: AgentConfig = DEFAULT_CONFIG) -> ChatOllama:
     """Build the Ollama chat model."""
-    return ChatOllama(model=config.llm_model, temperature=config.llm_temperature)
+    return ChatOllama(
+        model=agent_config.llm_model, temperature=agent_config.llm_temperature
+    )
 
 
 def _trace(state: AgentState, message: str) -> list[str]:
@@ -37,13 +39,11 @@ def _trace(state: AgentState, message: str) -> list[str]:
     return existing + [message]
 
 
-# ---------- Node: plan ----------
-
-
-def plan_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def plan_node(state: AgentState) -> dict:
     """Turn the user question into a focused search query."""
+    agent_config = DEFAULT_CONFIG
     question = state["question"]
-    llm = _llm(config)
+    llm = _llm(agent_config)
 
     messages = [
         ("system", PLAN_SYSTEM),
@@ -64,13 +64,12 @@ def plan_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
     }
 
 
-# ---------- Node: retrieve ----------
 
-
-def retrieve_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def retrieve_node(state: AgentState) -> dict:
     """Vector search the brain for candidate chunks."""
+    agent_config = DEFAULT_CONFIG
     query = state.get("search_query") or state["question"]
-    candidates = search(query, top_k=config.retrieve_top_k)
+    candidates = search(query, top_k=agent_config.retrieve_top_k)
     logger.info("retrieve: %d candidates for %r", len(candidates), query)
     return {
         "candidates": candidates,
@@ -78,18 +77,16 @@ def retrieve_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> di
     }
 
 
-# ---------- Node: rerank ----------
-
-
-def rerank_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def rerank_node(state: AgentState) -> dict:
     """Rerank candidates with the cross-encoder, blend with trust, keep top N."""
+    agent_config = DEFAULT_CONFIG
     question = state["question"]
     candidates = state.get("candidates", [])
     reranked = rerank(
         question,
         candidates,
-        top_k=config.final_top_k,
-        trust_weight=config.trust_weight,
+        top_k=agent_config.final_top_k,
+        trust_weight=agent_config.trust_weight,
     )
     logger.info("rerank: kept top %d", len(reranked))
     titles = ", ".join(c["title"][:30] for c in reranked)
@@ -98,8 +95,6 @@ def rerank_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict
         "trace": _trace(state, f"rerank: top {len(reranked)} [{titles}]"),
     }
 
-
-# ---------- Node: critique ----------
 
 
 def _parse_critique(text: str) -> tuple[bool, str, str]:
@@ -121,15 +116,16 @@ def _parse_critique(text: str) -> tuple[bool, str, str]:
     return sufficient, reason, refined
 
 
-def critique_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> dict:
+def critique_node(state: AgentState) -> dict:
     """Judge whether the reranked chunks are good enough to answer the question.
 
     If not, and we have retries left, set a refined query so the graph loops back.
     """
+    agent_config = DEFAULT_CONFIG
     question = state["question"]
     reranked = state.get("reranked", [])
     retry_count = state.get("retry_count", 0)
-    llm = _llm(config)
+    llm = _llm(agent_config)
 
     chunks_text = format_chunks(reranked)
     messages = [
@@ -140,21 +136,19 @@ def critique_node(state: AgentState, config: AgentConfig = DEFAULT_CONFIG) -> di
     sufficient, reason, refined = _parse_critique(resp.content)
 
     # If critique fails but we are out of retries, accept what we have
-    retries_left = retry_count < config.max_retries
+    retries_left = retry_count < agent_config.max_retries
     if not sufficient and not retries_left:
         logger.info("critique: insufficient but out of retries, proceeding")
         return {
             "retrieval_sufficient": True,  # forced accept
             "critique_notes": f"{reason} (accepted: out of retries)",
-            "trace": _trace(state, f"critique: insufficient, out of retries -> proceed"),
+            "trace": _trace(state, "critique: insufficient, out of retries -> proceed"),
         }
 
     update: dict = {
         "retrieval_sufficient": sufficient,
         "critique_notes": reason,
-        "trace": _trace(
-            state, f"critique: sufficient={sufficient} reason='{reason}'"
-        ),
+        "trace": _trace(state, f"critique: sufficient={sufficient} reason='{reason}'"),
     }
     if not sufficient:
         # set up a retry: bump count, refine the query
