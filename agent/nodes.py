@@ -27,9 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 def _llm(agent_config: AgentConfig = DEFAULT_CONFIG) -> ChatOllama:
-    """Build the Ollama chat model."""
     return ChatOllama(
-        model=agent_config.llm_model, temperature=agent_config.llm_temperature
+        model=agent_config.llm_model,
+        temperature=agent_config.llm_temperature,
+        num_ctx=4096,
+        num_predict=512,
     )
 
 

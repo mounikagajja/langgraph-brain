@@ -1,0 +1,11 @@
+{
+  "version": "v1_8b",
+  "n_questions": 50,
+  "context_relevance": 0.5135,
+  "answer_similarity": 0.5833,
+  "citation_rate": 0.88,
+  "grounding_rate": 0.14,
+  "human_review_rate": 0.86,
+  "empty_answer_rate": 0.0,
+  "mean_answer_chars": 546.0
+}
