@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 PLAN_SYSTEM = """You are a retrieval planner for a LangGraph knowledge base.
 The knowledge base contains GitHub issues, pull requests, and official docs
 for the LangGraph open source library. It is searched with a semantic

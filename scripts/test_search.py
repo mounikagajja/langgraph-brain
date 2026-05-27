@@ -19,7 +19,7 @@ if __name__ == "__main__":
     conn = connect()
     chunks = get_chunks(conn, [h["chunk_id"] for h in hits])
 
-    for h, c in zip(hits, chunks):
+    for h, c in zip(hits, chunks, strict=False):
         print(f"--- score={h['score']:.3f}  trust={c['trust_score']:.2f}  {c['source_type']} ---")
         print(c["title"])
         print(c["text"][:300].replace("\n", " "))

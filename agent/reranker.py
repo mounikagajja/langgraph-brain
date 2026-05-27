@@ -56,7 +56,7 @@ def rerank(
     raw_scores = _reranker().predict(pairs)
 
     scored: list[dict[str, Any]] = []
-    for chunk, raw in zip(chunks, raw_scores):
+    for chunk, raw in zip(chunks, raw_scores, strict=False):
         raw = float(raw)
         norm = _sigmoid(raw)
         trust = float(chunk.get("trust_score", 0.0))

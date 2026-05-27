@@ -8,4 +8,3 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
     saved = fetch_docs()
     print(f"\nDone. {saved} markdown files copied to data/raw/docs/")
-    

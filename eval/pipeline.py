@@ -19,6 +19,8 @@ from typing import Any
 from langchain_ollama import ChatOllama
 
 from agent.config import AgentConfig
+from agent.nodes import _parse_critique
+from agent.nodes_gen import URL_RE, _parse_self_check
 from agent.prompts import (
     CRITIQUE_SYSTEM,
     CRITIQUE_USER,
@@ -30,8 +32,6 @@ from agent.prompts import (
     SELF_CHECK_USER,
     format_chunks,
 )
-from agent.nodes import _parse_critique
-from agent.nodes_gen import URL_RE, _parse_self_check
 from agent.reranker import rerank
 from mcp_server.retrieval import search
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Iterable
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -61,7 +61,7 @@ class VectorStore:
                     vector=vec,
                     payload={**pl, "chunk_id": cid},
                 )
-                for cid, vec, pl in zip(batch_ids, batch_vecs, batch_payloads)
+                for cid, vec, pl in zip(batch_ids, batch_vecs, batch_payloads, strict=False)
             ]
             self.client.upsert(collection_name=self.collection, points=points)
             total += len(points)

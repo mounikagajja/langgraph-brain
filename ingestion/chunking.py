@@ -140,7 +140,7 @@ def chunk_doc(path: Path) -> list[Chunk]:
     return chunks
 
 
-# Issue / PR chunking 
+# Issue / PR chunking
 
 
 def _comment_chunks(
@@ -233,7 +233,7 @@ def chunk_pr(item: dict[str, Any]) -> list[Chunk]:
     return chunks
 
 
-# Driver 
+# Driver
 
 
 def chunk_all() -> int:

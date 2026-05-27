@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def _recency_boost(updated_at: str | None, now: datetime | None = None) -> float
     dt = _parse_dt(updated_at)
     if not dt:
         return 0.0
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     age_days = (now - dt).days
     if age_days <= 30:
         return RECENCY_MAX_BOOST

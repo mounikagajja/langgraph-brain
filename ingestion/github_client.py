@@ -6,9 +6,9 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 import httpx
 from dotenv import load_dotenv
@@ -53,7 +53,7 @@ class GitHubClient:
 
     def _get(self, url: str, params: dict | None = None) -> httpx.Response:
         """GET with rate-limit handling. Sleeps and retries on 403 rate-limit."""
-        for attempt in range(3):
+        for _attempt in range(3):
             r = self.client.get(url, params=params)
             if r.status_code == 200:
                 return r
@@ -76,8 +76,7 @@ class GitHubClient:
         next_url: str | None = url
         while next_url:
             r = self._get(next_url, params=params if next_url == url else None)
-            for item in r.json():
-                yield item
+            yield from r.json()
             link = r.headers.get("Link", "")
             next_url = None
             for part in link.split(","):
@@ -106,4 +105,4 @@ def load_json(path: Path) -> dict:
 
 
 def cutoff_date(months: int = 12) -> datetime:
-    return datetime.now(timezone.utc) - timedelta(days=months * 30)
+    return datetime.now(UTC) - timedelta(days=months * 30)

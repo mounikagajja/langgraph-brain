@@ -9,7 +9,8 @@ from pathlib import Path
 
 from sentence_transformers import SentenceTransformer
 
-from storage.metadata_db import connect, count as sqlite_count, upsert_chunks
+from storage.metadata_db import connect, upsert_chunks
+from storage.metadata_db import count as sqlite_count
 from storage.vector_store import VectorStore
 
 CHUNKS_PATH = Path("data/processed/chunks_scored.jsonl")
