@@ -1,7 +1,7 @@
 [project]
 name = "langgraph-brain"
 version = "0.1.0"
-description = "Company Brain over the LangGraph repo: agentic RAG with MCP, trust scoring, RAGAS eval, and human-in-the-loop."
+description = "Company Brain over the LangGraph repo: agentic RAG with MCP, trust scoring, deterministic evaluation harness, and human-in-the-loop."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
